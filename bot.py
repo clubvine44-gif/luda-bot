@@ -13,50 +13,57 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "gsk_RJMmidDfc1XLRiE86EVNWGdyb3FYa
 groq_client = Groq(api_key=GROQ_API_KEY)
 
 SALES_PROMPT = """Ты — опытный помощник продажника Люды. Люда продаёт сайты малому бизнесу.
-Твоя единственная задача: помочь Люде довести клиента до согласия на сделку.
+Люда сама выходит на клиентов — пишет или звонит первой. Клиент Люду не знает.
+
+ВАЖНО ПРО КОНТЕКСТ:
+- Это всегда холодный контакт — клиент Люду не ждал
+- Первое сообщение должно быть коротким, не навязчивым и с одним вопросом
+- Не пиши "приятно познакомиться" и не делай вид что уже знакомы
+- Не предполагай что клиент хочет сайт — сначала выясни ситуацию
 
 КАК ОБЩАЕШЬСЯ:
-- Живо и по-человечески, как опытный коллега рядом
+- Живо и по-человечески, коротко
 - С клиентом строго на "Вы"
-- Максимум 2-3 предложения клиенту за раз
-- Один вопрос за раз, никогда не несколько сразу
-- Веди плавно: интерес → доверие → решение → согласие
+- Максимум 2-3 предложения за раз
+- Один вопрос за раз
+- Веди плавно: знакомство → интерес → доверие → решение → согласие
 
 ЭТАПЫ:
-1. Тёплое знакомство — узнать чем занимается бизнес
+1. Представиться и зацепить интерес одним вопросом
 2. Выяснить есть ли сайт и как сейчас приходят клиенты
-3. Предложить конкретное решение под его ситуацию
-4. Назвать цену только когда клиент понял ценность
-5. Довести до "да, давайте"
+3. Показать что без сайта бизнес теряет клиентов
+4. Предложить конкретное решение под его бизнес
+5. Назвать цену только когда клиент понял ценность
+6. Получить "да, давайте"
 
 ПРОДУКТЫ:
 - Сайт-визитка: 5 000–8 000 руб., 3–5 дней
-- Каталог товаров: 8 000–15 000 руб., 5–7 дней
+- Каталог услуг: 8 000–15 000 руб., 5–7 дней
 - Интернет-магазин: 15 000–30 000 руб., 7–14 дней
 - Telegram Mini App: 10 000–25 000 руб., 5–10 дней
 - Лендинг: 4 000–7 000 руб., 2–4 дня
 
 ЖЁСТКИЕ ПРАВИЛА:
-1. Не упоминай договор, реквизиты, оплату, начало работ — это делает Люда сама
+1. Не упоминай договор, реквизиты, оплату, начало работ
 2. Не заканчивай диалог сам
-3. Когда клиент говорит "да" на цену или соглашается на сделку — напиши в [ЛЮДЕ]: КЛИЕНТ ГОТОВ
-4. При возражении "дорого" — не снижай цену сразу, сначала уточни
+3. Предлагай только то что подходит под бизнес клиента — базе отдыха не предлагай интернет-магазин
+4. Когда клиент сказал "да" на цену — напиши в [ЛЮДЕ]: КЛИЕНТ ГОТОВ
+5. При "дорого" — не снижай сразу, сначала уточни
 
-ФОРМАТ ОТВЕТА строго:
-[КЛИЕНТУ]: текст который Люда отправит клиенту
-[ЛЮДЕ]: короткая подсказка что происходит"""
+ФОРМАТ СТРОГО:
+[КЛИЕНТУ]: текст который Люда скопирует и отправит
+[ЛЮДЕ]: короткая подсказка что сейчас происходит"""
 
-# Вопросы для сбора ТЗ — задаются автоматически по цепочке
-TZ_QUESTIONS = [
-    ("Название бизнеса",   "Как называется Ваш бизнес?"),
-    ("Цель сайта",         "Что должен делать сайт — принимать заявки, показывать услуги, продавать товары или что-то другое?"),
-    ("Тип сайта",          "Что именно Вам нужно — сайт-визитка, каталог, интернет-магазин или лендинг?"),
-    ("Разделы",            "Какие разделы хотите на сайте? Например: о нас, услуги, цены, портфолио, контакты."),
-    ("Стиль и цвета",      "Какой стиль и цвета Вам нравятся — строгий, яркий, минимализм? Есть предпочтения?"),
-    ("Примеры сайтов",     "Есть ли сайты которые Вам нравятся по внешнему виду? Скиньте ссылки если есть."),
-    ("Контент",            "У Вас есть готовые фото, тексты, логотип — или нужно делать с нуля?"),
-    ("Контакты",           "Какие контакты указать на сайте — телефон, адрес, соцсети?"),
-    ("Срок",               "Когда Вам нужно готово — есть конкретный дедлайн?"),
+# Вопросы ТЗ — адаптируются под бизнес через ИИ
+TZ_QUESTIONS_BASE = [
+    ("Название бизнеса",   "узнать точное название бизнеса клиента"),
+    ("Цель сайта",         "узнать что должен делать сайт: принимать звонки, заявки, бронирования, показывать услуги"),
+    ("Разделы сайта",      "узнать какие разделы нужны на сайте исходя из его бизнеса"),
+    ("Стиль и цвета",      "узнать какой стиль и цвета хочет клиент"),
+    ("Примеры сайтов",     "узнать есть ли сайты которые нравятся клиенту по дизайну, попросить прислать ссылки"),
+    ("Контент",            "узнать есть ли готовые фото, тексты описания услуг, логотип — или нужно делать с нуля"),
+    ("Контакты для сайта", "узнать конкретно какие контакты указать: номер телефона, адрес, названия соцсетей и ссылки на них"),
+    ("Срок",               "узнать когда нужно готово, есть ли дедлайн"),
 ]
 
 sessions = {}
@@ -70,7 +77,8 @@ def get_session(user_id):
             "messages": [],
             "tz_data": {},
             "tz_step": 0,
-            "agreed_price": None,
+            "business": "",
+            "agreed_price": "",
         }
     return sessions[user_id]
 
@@ -81,23 +89,24 @@ def reset_session(user_id):
         "messages": [],
         "tz_data": {},
         "tz_step": 0,
-        "agreed_price": None,
+        "business": "",
+        "agreed_price": "",
     }
 
-async def ask_groq(system, messages):
+async def ask_groq(system, messages, temp=0.75):
     try:
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "system", "content": system}] + messages,
             max_tokens=500,
-            temperature=0.75
+            temperature=temp
         )
         return response.choices[0].message.content
     except Exception as e:
         logger.error(f"Groq error: {e}")
         return "[КЛИЕНТУ]: Одну секунду...\n[ЛЮДЕ]: Ошибка соединения, попробуй ещё раз."
 
-def parse(response):
+def parse_sales(response):
     parts = response.split("[ЛЮДЕ]:")
     client = parts[0].replace("[КЛИЕНТУ]:", "").strip()
     advice = parts[1].strip() if len(parts) > 1 else ""
@@ -108,34 +117,68 @@ def client_ready(advice):
 
 def kb_main():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🆕 Новый клиент", callback_data="new_client")],
-        [InlineKeyboardButton("📖 Обучение PDF",  callback_data="get_pdf")],
+        [InlineKeyboardButton("🆕 Новый клиент",        callback_data="new_client")],
+        [InlineKeyboardButton("📖 Обучение PDF",         callback_data="get_pdf")],
+        [InlineKeyboardButton("🔧 Проверить бота",       callback_data="diagnostics")],
     ])
 
 def kb_sales():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("💬 Ввести ответ клиента",  callback_data="sales_reply")],
-        [InlineKeyboardButton("✅ Клиент согласился",     callback_data="go_tz")],
-        [InlineKeyboardButton("🔄 Новый клиент",          callback_data="new_client")],
+        [InlineKeyboardButton("💬 Ввести ответ клиента", callback_data="sales_reply")],
+        [InlineKeyboardButton("✅ Клиент согласился",    callback_data="go_tz")],
+        [InlineKeyboardButton("🔄 Новый клиент",         callback_data="new_client")],
     ])
 
 def kb_tz_answer():
-    """Кнопка во время сбора ТЗ — только ввести ответ"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("💬 Ввести ответ клиента", callback_data="tz_reply")],
         [InlineKeyboardButton("⏭ Клиент не знает",      callback_data="tz_skip")],
     ])
 
+async def make_tz_question(business, label, topic, prev_answers):
+    """Генерирует живой вопрос адаптированный под конкретный бизнес"""
+    context = f"Бизнес клиента: {business}.\n"
+    if prev_answers:
+        context += f"Уже известно: {prev_answers}\n"
+
+    system = (
+        "Ты помогаешь собрать информацию для разработки сайта. "
+        "Сформулируй один короткий живой вопрос клиенту на Вы. "
+        "Вопрос должен быть адаптирован под конкретный бизнес — "
+        "не задавай лишних вариантов которые не подходят этому бизнесу. "
+        "Только вопрос без предисловий."
+    )
+    prompt = f"{context}\nНужно узнать: {topic}\nДай один вопрос:"
+    resp = await ask_groq(system, [{"role": "user", "content": prompt}], temp=0.6)
+    return resp.replace("[КЛИЕНТУ]:", "").strip()
+
+async def clarify_answer(business, label, answer):
+    """Проверяет расплывчатый ответ и уточняет если нужно"""
+    system = (
+        "Ты анализируешь ответ клиента при сборе данных для сайта. "
+        "Если ответ расплывчатый, неполный или непонятный — верни УТОЧНИ: и напиши уточняющий вопрос. "
+        "Если ответ нормальный и конкретный — верни ОК: и повтори ответ своими словами кратко. "
+        "Например: 'все' на вопрос про контакты — это расплывчато, нужно уточнить какие именно. "
+        "'89001234567, Instagram @myshop, ул. Ленина 5' — это конкретно, ОК."
+    )
+    prompt = f"Бизнес: {business}\nВопрос был про: {label}\nОтвет клиента: {answer}"
+    resp = await ask_groq(system, [{"role": "user", "content": prompt}], temp=0.3)
+    return resp.strip()
+
 async def send_tz_question(bot, chat_id, session):
-    """Отправляет текущий вопрос ТЗ клиенту"""
     step = session["tz_step"]
-    if step >= len(TZ_QUESTIONS):
+    if step >= len(TZ_QUESTIONS_BASE):
         await generate_brief(bot, chat_id, session)
         return
 
-    label, question = TZ_QUESTIONS[step]
-    total = len(TZ_QUESTIONS)
+    label, topic = TZ_QUESTIONS_BASE[step]
+    total = len(TZ_QUESTIONS_BASE)
     session["stage"] = f"tz_answer_{step}"
+
+    # Собираем контекст предыдущих ответов
+    prev = ", ".join([f"{k}: {v}" for k, v in session["tz_data"].items()]) if session["tz_data"] else ""
+
+    question = await make_tz_question(session["business"], label, topic, prev)
 
     await bot.send_message(
         chat_id=chat_id,
@@ -149,14 +192,22 @@ async def send_tz_question(bot, chat_id, session):
     )
 
 async def generate_brief(bot, chat_id, session):
-    """Генерирует итоговое ТЗ"""
     tz = session.get("tz_data", {})
+    business = session.get("business", "не указан")
+    price = session.get("agreed_price", "не указана")
+
     tz_text = "\n".join([f"{k}: {v}" for k, v in tz.items()]) if tz else "нет данных"
 
-    brief_prompt = (
-        f"Составь чёткое техническое задание на разработку сайта.\n\n"
+    system = (
+        "Ты составляешь техническое задание для разработчика сайта. "
+        "Пиши только ТЗ — чётко, конкретно, без предисловий и лишних фраз."
+    )
+    prompt = (
+        f"Составь техническое задание на разработку сайта.\n\n"
+        f"Бизнес: {business}\n"
+        f"Согласованная цена: {price}\n"
         f"Данные от клиента:\n{tz_text}\n\n"
-        f"Оформи строго по разделам без лишних слов и предисловий:\n"
+        f"Формат строго по разделам:\n"
         f"КЛИЕНТ: ...\n"
         f"БИЗНЕС: ...\n"
         f"ЦЕЛЬ САЙТА: ...\n"
@@ -166,27 +217,105 @@ async def generate_brief(bot, chat_id, session):
         f"КОНТЕНТ: ...\n"
         f"КОНТАКТЫ: ...\n"
         f"СРОК: ...\n"
-        f"БЮДЖЕТ: ...\n"
+        f"БЮДЖЕТ: {price}\n"
         f"ПРИМЕЧАНИЯ: ..."
     )
-
-    brief = await ask_groq(
-        "Ты составляешь техническое задание для разработчика сайта. "
-        "Пиши только ТЗ — чётко, конкретно, без предисловий и лишних фраз.",
-        [{"role": "user", "content": brief_prompt}]
-    )
+    brief = await ask_groq(system, [{"role": "user", "content": prompt}])
     clean = brief.replace("[КЛИЕНТУ]:", "").replace("[ЛЮДЕ]:", "").strip()
 
     await bot.send_message(
         chat_id=chat_id,
-        text=(
-            f"📄 *ТЕХНИЧЕСКОЕ ЗАДАНИЕ ГОТОВО:*\n\n{clean}\n\n"
-            f"_Скопируй и отправь разработчику_"
-        ),
+        text=f"📄 *ТЕХНИЧЕСКОЕ ЗАДАНИЕ:*\n\n{clean}\n\n_Скопируй и отправь разработчику_",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🆕 Новый клиент", callback_data="new_client")]
         ])
+    )
+
+async def run_diagnostics(bot, chat_id):
+    """Полная проверка всех компонентов бота"""
+    results = []
+
+    # 1. Telegram Bot API
+    try:
+        me = await bot.get_me()
+        results.append(f"✅ Telegram API — @{me.username}")
+    except Exception as e:
+        results.append(f"❌ Telegram API — {e}")
+
+    # 2. Groq API + модель
+    try:
+        resp = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": "Ответь одним словом: работаю"}],
+            max_tokens=10,
+        )
+        answer = resp.choices[0].message.content.strip()
+        results.append(f"✅ Groq API — ответил: «{answer}»")
+    except Exception as e:
+        results.append(f"❌ Groq API — {e}")
+
+    # 3. PDF файл
+    pdf_path = os.path.join(os.path.dirname(__file__), "lyuda_training.pdf")
+    if os.path.exists(pdf_path):
+        size_kb = os.path.getsize(pdf_path) // 1024
+        results.append(f"✅ PDF обучение — найден ({size_kb} КБ)")
+    else:
+        results.append("❌ PDF обучение — файл не найден")
+
+    # 4. Переменные окружения
+    token_ok = bool(os.environ.get("BOT_TOKEN"))
+    groq_ok  = bool(os.environ.get("GROQ_API_KEY"))
+    if token_ok and groq_ok:
+        results.append("✅ Переменные окружения — BOT_TOKEN и GROQ_API_KEY заданы")
+    else:
+        missing = []
+        if not token_ok: missing.append("BOT_TOKEN")
+        if not groq_ok:  missing.append("GROQ_API_KEY")
+        results.append(f"⚠️ Переменные окружения — используются значения из кода ({', '.join(missing)} не заданы в Railway)")
+
+    # 5. Проверка генерации ТЗ-вопроса
+    try:
+        q = await make_tz_question("тестовый бизнес", "Название", "узнать название бизнеса", "")
+        if q and len(q) > 5:
+            results.append("✅ Генерация вопросов ТЗ — работает")
+        else:
+            results.append("⚠️ Генерация вопросов ТЗ — пустой ответ")
+    except Exception as e:
+        results.append(f"❌ Генерация вопросов ТЗ — {e}")
+
+    # 6. Проверка продажного промпта
+    try:
+        r = await ask_groq(SALES_PROMPT, [{"role": "user", "content": "Клиент занимается: кафе. Дай первое сообщение."}])
+        if "[КЛИЕНТУ]:" in r:
+            results.append("✅ Продажный режим — формат ответа корректный")
+        else:
+            results.append("⚠️ Продажный режим — ответ без тега [КЛИЕНТУ]")
+    except Exception as e:
+        results.append(f"❌ Продажный режим — {e}")
+
+    # Итог
+    errors   = [r for r in results if r.startswith("❌")]
+    warnings = [r for r in results if r.startswith("⚠️")]
+    ok       = [r for r in results if r.startswith("✅")]
+
+    if errors:
+        status = "🔴 Есть критические ошибки"
+    elif warnings:
+        status = "🟡 Работает с замечаниями"
+    else:
+        status = "🟢 Всё работает нормально"
+
+    text = f"🔧 *Диагностика бота*\n\n"
+    text += "\n".join(results)
+    text += f"\n\n*Итог:* {status}"
+    text += f"\n✅ {len(ok)}  ⚠️ {len(warnings)}  ❌ {len(errors)}"
+
+    await bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode="Markdown",
+        reply_markup=kb_main()
     )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -195,8 +324,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Привет, Люда!\n\n"
         "Я веду клиента от первого «здравствуйте» до готового ТЗ для разработчика.\n\n"
-        "🔹 Сначала помогу довести клиента до согласия\n"
-        "🔹 Потом автоматически соберу все детали для сайта\n\n"
+        "🔹 Помогу написать клиенту с нуля\n"
+        "🔹 Доведу до согласия\n"
+        "🔹 Соберу все детали для сайта\n\n"
         "Начнём? 👇",
         reply_markup=kb_main()
     )
@@ -206,7 +336,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = query.from_user.id
 
-    key = f"btn_{user_id}_{query.data}_{query.id}"
+    key = f"btn_{user_id}_{query.id}"
     if key in processing:
         return
     processing.add(key)
@@ -215,7 +345,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         session = get_session(user_id)
         chat_id = query.message.chat_id
 
-        if query.data == "new_client":
+        if query.data == "diagnostics":
+            await query.message.reply_text("🔧 Запускаю проверку, подожди...")
+            await run_diagnostics(context.bot, chat_id)
+            return
+
+        elif query.data == "new_client":
             reset_session(user_id)
             session = get_session(user_id)
             session["mode"] = "sales"
@@ -233,23 +368,30 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif query.data == "go_tz":
             session["mode"] = "tz"
             session["tz_step"] = 0
+            # Пытаемся извлечь согласованную цену из истории диалога
+            history_text = " ".join([m["content"] for m in session["messages"]])
+            for word in ["5000", "6000", "7000", "8000", "10000", "12000", "15000", "20000", "25000", "30000"]:
+                if word in history_text.replace(" ", "").replace("–", ""):
+                    session["agreed_price"] = word + " руб."
+                    break
+
             await query.message.reply_text(
-                "✅ *Клиент согласился — отлично!*\n\n"
+                "✅ *Отлично — клиент готов!*\n\n"
                 "Теперь собираем детали для сайта.\n"
-                "Я буду давать вопросы один за другим — "
-                "ты копируешь и отправляешь клиенту, потом вводишь его ответ.\n\n"
+                "Копируй вопрос → отправляй клиенту → вводи его ответ.\n\n"
                 "Поехали 👇",
                 parse_mode="Markdown"
             )
             await send_tz_question(context.bot, chat_id, session)
 
         elif query.data == "tz_reply":
-            session["stage"] = f"tz_answer_{session['tz_step']}"
+            step = session.get("tz_step", 0)
+            session["stage"] = f"tz_answer_{step}"
             await query.message.reply_text("Напечатай ответ клиента:")
 
         elif query.data == "tz_skip":
             step = session["tz_step"]
-            label, _ = TZ_QUESTIONS[step]
+            label, _ = TZ_QUESTIONS_BASE[step]
             session["tz_data"][label] = "не указано"
             session["tz_step"] += 1
             await send_tz_question(context.bot, chat_id, session)
@@ -289,10 +431,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ── РЕЖИМ ПРОДАЖИ ─────────────────────────────────────────────────
         if session["mode"] == "sales":
             if session["stage"] == "ask_business":
+                session["business"] = text
                 session["stage"] = "conversation"
                 session["messages"].append({
                     "role": "user",
-                    "content": f"Клиент занимается: {text}. Дай первое тёплое сообщение для начала разговора. На Вы."
+                    "content": (
+                        f"Клиент занимается: {text}. "
+                        f"Люда пишет этому клиенту первой — он её не знает. "
+                        f"Дай первое короткое сообщение: представься и зацепи интерес одним вопросом. "
+                        f"Не делай вид что знакомы. На Вы."
+                    )
                 })
             elif session["stage"] in ("conversation", "waiting_reply"):
                 session["stage"] = "conversation"
@@ -305,14 +453,14 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             response = await ask_groq(SALES_PROMPT, session["messages"])
             session["messages"].append({"role": "assistant", "content": response})
-            client_part, advice_part = parse(response)
+            client_part, advice_part = parse_sales(response)
 
             msg = f"✉️ *Отправь клиенту:*\n\n_{client_part}_"
-            if advice_part:
+            if advice_part and "КЛИЕНТ ГОТОВ" not in advice_part.upper():
                 msg += f"\n\n💡 _{advice_part}_"
 
             if client_ready(advice_part):
-                msg += "\n\n🟢 *Клиент готов!*"
+                msg += "\n\n🟢 *Клиент готов — переходи к деталям сайта!*"
                 await update.message.reply_text(
                     msg,
                     parse_mode="Markdown",
@@ -328,8 +476,26 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ── РЕЖИМ СБОРА ТЗ ────────────────────────────────────────────────
         if session["mode"] == "tz" and session["stage"].startswith("tz_answer_"):
             step = int(session["stage"].replace("tz_answer_", ""))
-            label, _ = TZ_QUESTIONS[step]
-            session["tz_data"][label] = text
+            label, _ = TZ_QUESTIONS_BASE[step]
+
+            # Проверяем расплывчатость ответа
+            check = await clarify_answer(session["business"], label, text)
+
+            if check.startswith("УТОЧНИ:"):
+                # Ответ расплывчатый — просим уточнить
+                clarify_q = check.replace("УТОЧНИ:", "").strip()
+                await update.message.reply_text(
+                    f"⚠️ *Ответ нечёткий — уточни у клиента:*\n\n_{clarify_q}_\n\n"
+                    f"Введи уточнённый ответ:",
+                    parse_mode="Markdown",
+                    reply_markup=kb_tz_answer()
+                )
+                # Остаёмся на том же вопросе
+                return
+
+            # Ответ нормальный — сохраняем и идём дальше
+            clean_answer = check.replace("ОК:", "").strip()
+            session["tz_data"][label] = clean_answer if clean_answer else text
             session["tz_step"] = step + 1
             await send_tz_question(context.bot, chat_id, session)
 
