@@ -7,7 +7,7 @@ from groq import Groq
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8638675668:AAEaG5QS-_5dzb3F4AvwevIw0HleL4pDJHU")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8638675668:AAHj2aNq2sudn7CiEV2Hz94q9I33itJpUUw")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
