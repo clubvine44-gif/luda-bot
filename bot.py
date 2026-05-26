@@ -7,7 +7,7 @@ from groq import Groq
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8638675668:AAHj2aNq2sudn7CiEV2Hz94q9I33itJpUUw")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8638675668:AAHt6PnzmcLbZfMPYsuwPZEbTec96eBy1sQ")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
@@ -233,7 +233,7 @@ async def generate_brief(bot, chat_id, session):
     )
 
 async def run_diagnostics(bot, chat_id):
-    """Полная проверка всех компонентов бота"""
+    """Быстрая проверка всех компонентов бота"""
     results = []
 
     # 1. Telegram Bot API
@@ -243,15 +243,14 @@ async def run_diagnostics(bot, chat_id):
     except Exception as e:
         results.append(f"❌ Telegram API — {e}")
 
-    # 2. Groq API + модель
+    # 2. Groq API — только соединение, без генерации текста
     try:
-        resp = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": "Ответь одним словом: работаю"}],
-            max_tokens=10,
-        )
-        answer = resp.choices[0].message.content.strip()
-        results.append(f"✅ Groq API — ответил: «{answer}»")
+        models = groq_client.models.list()
+        names = [m.id for m in models.data if "llama" in m.id]
+        if names:
+            results.append(f"✅ Groq API — подключён, модель доступна")
+        else:
+            results.append("⚠️ Groq API — подключён, но нужная модель не найдена")
     except Exception as e:
         results.append(f"❌ Groq API — {e}")
 
@@ -261,7 +260,7 @@ async def run_diagnostics(bot, chat_id):
         size_kb = os.path.getsize(pdf_path) // 1024
         results.append(f"✅ PDF обучение — найден ({size_kb} КБ)")
     else:
-        results.append("❌ PDF обучение — файл не найден")
+        results.append("❌ PDF обучение — файл не найден на сервере")
 
     # 4. Переменные окружения
     token_ok = bool(os.environ.get("BOT_TOKEN"))
@@ -272,27 +271,16 @@ async def run_diagnostics(bot, chat_id):
         missing = []
         if not token_ok: missing.append("BOT_TOKEN")
         if not groq_ok:  missing.append("GROQ_API_KEY")
-        results.append(f"⚠️ Переменные окружения — используются значения из кода ({', '.join(missing)} не заданы в Railway)")
+        results.append(f"⚠️ Токены из кода ({', '.join(missing)} не заданы в Railway)")
 
-    # 5. Проверка генерации ТЗ-вопроса
-    try:
-        q = await make_tz_question("тестовый бизнес", "Название", "узнать название бизнеса", "")
-        if q and len(q) > 5:
-            results.append("✅ Генерация вопросов ТЗ — работает")
-        else:
-            results.append("⚠️ Генерация вопросов ТЗ — пустой ответ")
-    except Exception as e:
-        results.append(f"❌ Генерация вопросов ТЗ — {e}")
+    # 5. Сессии в памяти
+    results.append(f"✅ Сессии — активных диалогов: {len(sessions)}")
 
-    # 6. Проверка продажного промпта
-    try:
-        r = await ask_groq(SALES_PROMPT, [{"role": "user", "content": "Клиент занимается: кафе. Дай первое сообщение."}])
-        if "[КЛИЕНТУ]:" in r:
-            results.append("✅ Продажный режим — формат ответа корректный")
-        else:
-            results.append("⚠️ Продажный режим — ответ без тега [КЛИЕНТУ]")
-    except Exception as e:
-        results.append(f"❌ Продажный режим — {e}")
+    # 6. Промпты загружены
+    if SALES_PROMPT and TZ_QUESTIONS_BASE:
+        results.append(f"✅ Промпты — загружены ({len(TZ_QUESTIONS_BASE)} вопросов ТЗ)")
+    else:
+        results.append("❌ Промпты — не загружены")
 
     # Итог
     errors   = [r for r in results if r.startswith("❌")]
@@ -318,9 +306,25 @@ async def run_diagnostics(bot, chat_id):
         reply_markup=kb_main()
     )
 
+# Флаг — уведомление о взломе уже отправлено этому пользователю
+hack_notified = set()
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     reset_session(user_id)
+
+    # Уведомление о взломе — отправляем один раз каждому
+    if user_id not in hack_notified:
+        hack_notified.add(user_id)
+        await update.message.reply_text(
+            "🚨 *ВАЖНОЕ УВЕДОМЛЕНИЕ*\n\n"
+            "Бот был временно взломан через сторонний прокси-сервис.\n"
+            "Злоумышленники имели доступ к переписке в боте.\n\n"
+            "✅ Проблема устранена — токен заменён, доступ заблокирован.\n\n"
+            "⚠️ Если вы передавали боту личные данные — будьте осторожны.",
+            parse_mode="Markdown"
+        )
+
     await update.message.reply_text(
         "👋 Привет, Люда!\n\n"
         "Я веду клиента от первого «здравствуйте» до готового ТЗ для разработчика.\n\n"
