@@ -8,6 +8,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8638675668:AAHt6PnzmcLbZfMPYsuwPZEbTec96eBy1sQ")
+
+# ─────────────────────────────────────────────
+# МОДЕРАТОР — счётчик предупреждений
+# ─────────────────────────────────────────────
+mod_warnings: dict[int, int] = {}
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
@@ -518,11 +523,96 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         processing.discard(key)
 
+async def ai_moderate(text: str) -> str | None:
+    """Отправляет сообщение в Groq для анализа. Возвращает тип нарушения или None."""
+    system = (
+        "Ты модератор Telegram-группы. Анализируй сообщение и определи нарушение.\n"
+        "Отвечай СТРОГО одним словом:\n"
+        "МАТ — если есть мат, оскорбления, нецензурная лексика (в том числе завуалированная: х*й, б**дь, f*ck и т.п.)\n"
+        "РЕКЛАМА — если есть реклама, спам, ссылки на каналы/сайты, призывы подписаться, упоминания чужих аккаунтов с целью продвижения, предложения заработка, казино, ставки\n"
+        "ОК — если сообщение нормальное\n"
+        "Только одно слово. Никаких объяснений."
+    )
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": f"Сообщение: {text}"}
+            ],
+            max_tokens=10,
+            temperature=0.0,
+        )
+        result = response.choices[0].message.content.strip().upper()
+        if "МАТ" in result:
+            return "мат"
+        elif "РЕКЛАМА" in result:
+            return "реклама"
+        return None
+    except Exception as e:
+        logger.error(f"Groq moderation error: {e}")
+        return None
+
+
+async def moderator_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Модератор группы — анализирует сообщения через ИИ."""
+    msg = update.message
+    if not msg or not msg.text:
+        return
+    user = msg.from_user
+    if not user:
+        return
+    chat_id = msg.chat_id
+
+    # Пропускаем администраторов
+    try:
+        admins = await context.bot.get_chat_administrators(chat_id)
+        admin_ids = {a.user.id for a in admins}
+        if user.id in admin_ids:
+            return
+    except Exception:
+        return
+
+    # ИИ-анализ сообщения
+    violation = await ai_moderate(msg.text)
+    if not violation:
+        return
+
+    # Удаляем сообщение
+    try:
+        await msg.delete()
+    except Exception as e:
+        logger.warning(f"Не удалось удалить сообщение: {e}")
+
+    mention = f"@{user.username}" if user.username else f'<a href="tg://user?id={user.id}">{user.full_name}</a>'
+    mod_warnings[user.id] = mod_warnings.get(user.id, 0) + 1
+    count = mod_warnings[user.id]
+
+    if count == 1:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"⚠️ {mention}, предупреждение! Причина: <b>{violation}</b>. Следующее нарушение — бан.",
+            parse_mode="HTML",
+        )
+    else:
+        try:
+            await context.bot.ban_chat_member(chat_id=chat_id, user_id=user.id)
+            mod_warnings.pop(user.id, None)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🚫 {mention} заблокирован. Причина: повторное нарушение (<b>{violation}</b>).",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.error(f"Не удалось забанить {user.id}: {e}")
+
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, moderator_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, message_handler))
     logger.info("Luda Bot started!")
     app.run_polling(drop_pending_updates=True)
 
